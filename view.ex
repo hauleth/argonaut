@@ -6,9 +6,7 @@ defmodule Argonaut.View do
   defmacro __using__(name) when is_atom(name) or is_bitstring(name) do
     views(singular: name)
   end
-  defmacro __using__(opts) when is_list(opts) do
-    views(opts)
-  end
+  defmacro __using__(opts) when is_list(opts), do: views(opts)
 
   defp views(opts) do
     singular = opts[:singular]

@@ -3,72 +3,114 @@ defmodule Argonaut.View do
   Simplify JSON API views
   """
 
-  defmacro __using__(name) when is_atom(name) or is_bitstring(name) do
-    views(singular: name)
-  end
-  defmacro __using__(opts) when is_list(opts), do: views(opts)
-
-  defp views(opts) do
-    singular = opts[:singular]
-    plural = opts[:plural] || :"#{singular}s"
-
+  defmacro __using__(_) do
     quote do
-      require Argonaut.View
+      import Argonaut.View, only: [schema: 2]
+      @primary_key nil
 
-      @behaviour Argonaut.View
-
-      def render("index.json", %{unquote(plural) => items, conn: conn} = extra) do
-        Argonaut.View.render(conn, items, __MODULE__, extra)
-      end
-      def render("show.json", %{unquote(singular) => item, conn: conn} = extra) do
-        Argonaut.View.render(conn, item, __MODULE__, extra)
-      end
-
-      def render("item.json", %{item: item} = map) do
-        %{id: item.id,
-          type: "#{unquote(singular)}",
-          attributes: attributes(item)}
-        |> add_relations(item, item.__struct__.__schema__(:associations))
-      end
-
-      defp add_relations(data, model, relationships) do
-        Enum.reduce(relationships, data, fn (field, data) ->
-          add_relation(data, field, Map.fetch!(model, field))
-        end)
-      end
-
-      defp add_relation(data, field, %Ecto.Association.NotLoaded{}), do: data
-      defp add_relation(data, field, model) do
-        case relation(field, model) do
-          :skip -> data
-          rel -> Map.update(data, :relationships, %{field => rel}, &Map.put_new(&1, field, rel))
-        end
-      end
-
-      def relation(_, _), do: :skip
-
-      defoverridable relation: 2
+      Module.register_attribute(__MODULE__, :argonaut_fields, accumulate: true)
+      Module.register_attribute(__MODULE__, :argonaut_relations, accumulate: true)
     end
   end
 
-  def render(conn, data, module, extra) when is_list(data) do
-    %{links: apply(module, :links, [conn, data]),
-      data: Phoenix.View.render_many(data, module, "item.json", as: :item)}
+  defmacro schema(type, [do: block]) do
+    views(type, block)
+  end
+
+  defmacro field(name, opts \\ []) do
+    quote do
+      Argonaut.View.__field__(__MODULE__, unquote(name), unquote(opts))
+    end
+  end
+
+  defmacro relation(name, view, opts \\ []) do
+    quote do
+      Argonaut.View.__relation__(__MODULE__, unquote(name), unquote(view), unquote(opts))
+    end
+  end
+
+  defp views(type, block) do
+    quote do
+      require Argonaut.View
+
+      if @primary_key == nil do
+        @primary_key :id
+      end
+
+      try do
+        import Argonaut.View
+        unquote(block)
+      after
+        :ok
+      end
+
+      def render("index.json", %{data: items} = extra) do
+        Argonaut.View.__render__(items, __MODULE__, extra)
+      end
+      def render("show.json", %{data: item} = extra) do
+        Argonaut.View.__render__(item, __MODULE__, extra)
+      end
+      def render("item.json", %{item: item} = map) do
+        %{id: Map.fetch!(item, @primary_key),
+          type: "#{unquote(type)}",
+          attributes: Argonaut.View.__attributes__(__MODULE__, item, @argonaut_fields),
+          relationships: Argonaut.View.__relations__(__MODULE__, item, @argonaut_relations)}
+      end
+    end
+  end
+
+  def __field__(mod, name, opts) do
+    Module.put_attribute(mod, :argonaut_fields, {name, opts})
+  end
+  def __relation__(mod, name, view, opts) do
+    Module.put_attribute(mod, :argonaut_relations, {name, view, opts})
+  end
+
+  def __attributes__(mod, model, fields) do
+    Enum.reduce(fields, %{}, fn({field, opts}, acc) ->
+      id = opts[:as] || field
+      value = cond do
+        opts[:value] -> opts[:value]
+        :erlang.function_exported(mod, field, 1) -> apply(mod, field, [model])
+        true -> Map.fetch!(model, field)
+      end
+
+      Map.put_new(acc, id, value)
+    end)
+  end
+
+  def __relations__(mod, model, relations) do
+    Enum.reduce(relations, %{}, fn({field, view, opts}, acc) ->
+      id = opts[:as] || field
+      data = rel(view, Map.fetch!(model, field), opts)
+
+      if data do
+        Map.put_new(acc, id, data)
+      else
+        acc
+      end
+    end)
+  end
+
+  defp rel(view, %Ecto.Association.NotLoaded{}, opts), do: nil
+  defp rel(view, models, opts) when is_list(models) do
+    Phoenix.View.render_many(models, view, "index.json", as: :data)
+  end
+  defp rel(view, model, opts) do
+    Phoenix.View.render_one(model, view, "show.json", as: :data)
+  end
+
+  def __render__(data, module, extra) when is_list(data) do
+    %{data: Phoenix.View.render_many(data, module, "item.json", as: :item)}
     |> meta(extra[:meta])
   end
-  def render(conn, data, module, extra) do
-    %{links: apply(module, :links, [conn, data]),
-      data: Phoenix.View.render_one(data, module, "item.json", as: :item)}
+  def __render__(data, module, extra) do
+    %{data: Phoenix.View.render_one(data, module, "item.json", as: :item)}
     |> meta(extra[:meta])
   end
 
-  def meta(data, nil), do: data
-  def meta(data, %{} = extra) do
+  defp meta(data, nil), do: data
+  defp meta(data, extra) do
     Map.put(data, :meta, extra)
   end
-
-  @callback attributes(map()) :: map()
-  @callback relation(atom(), map()) :: map() | :skip
-  @callback links(map(), map() | list()) :: map()
-  @optional_callbacks relation: 2
 end

@@ -79,7 +79,7 @@ defmodule Argonaut.View do
     end)
   end
 
-  def __relations__(mod, model, relations) do
+  def __relations__(_mod, model, relations) do
     Enum.reduce(relations, %{}, fn({field, view, opts}, acc) ->
       id = opts[:as] || field
       data = rel(view, Map.fetch!(model, field), opts)
@@ -92,11 +92,11 @@ defmodule Argonaut.View do
     end)
   end
 
-  defp rel(view, %Ecto.Association.NotLoaded{}, opts), do: nil
-  defp rel(view, models, opts) when is_list(models) do
+  defp rel(_view, %Ecto.Association.NotLoaded{}, _opts), do: nil
+  defp rel(view, models, _opts) when is_list(models) do
     Phoenix.View.render_many(models, view, "index.json", as: :data)
   end
-  defp rel(view, model, opts) do
+  defp rel(view, model, _opts) do
     Phoenix.View.render_one(model, view, "show.json", as: :data)
   end
 

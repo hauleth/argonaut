@@ -23,9 +23,15 @@ defmodule Argonaut.View do
     end
   end
 
-  defmacro relation(name, view, opts \\ []) do
+  defmacro has_one(name, view, opts \\ []) do
     quote do
-      Argonaut.View.__relation__(__MODULE__, unquote(name), unquote(view), unquote(opts))
+      Argonaut.View.__relation__(__MODULE__, :one, unquote(name), unquote(view), unquote(opts))
+    end
+  end
+
+  defmacro has_many(name, view, opts \\ []) do
+    quote do
+      Argonaut.View.__relation__(__MODULE__, :many, unquote(name), unquote(view), unquote(opts))
     end
   end
 
@@ -44,6 +50,10 @@ defmodule Argonaut.View do
         :ok
       end
 
+      def __type__ do
+        "#{unquote(type)}"
+      end
+
       def render("index.json", %{data: items} = extra) do
         Argonaut.View.__render__(items, __MODULE__, extra)
       end
@@ -52,7 +62,7 @@ defmodule Argonaut.View do
       end
       def render("item.json", %{item: item} = map) do
         %{id: Map.fetch!(item, @primary_key),
-          type: "#{unquote(type)}",
+          type: __type__,
           attributes: Argonaut.View.__attributes__(__MODULE__, item, @argonaut_fields),
           relationships: Argonaut.View.__relations__(__MODULE__, item, @argonaut_relations)}
       end
@@ -62,8 +72,10 @@ defmodule Argonaut.View do
   def __field__(mod, name, opts) do
     Module.put_attribute(mod, :argonaut_fields, {name, opts})
   end
-  def __relation__(mod, name, view, opts) do
-    Module.put_attribute(mod, :argonaut_relations, {name, view, opts})
+
+  def __relation__(mod, count, name, view, opts) do
+    Module.put_attribute(mod, :argonaut_fields, {name, opts ++ [relation: count, type: opts[:type] || view.__type__]})
+    Module.put_attribute(mod, :argonaut_relations, {name, count, view, opts})
   end
 
   def __attributes__(mod, model, fields) do
@@ -72,6 +84,10 @@ defmodule Argonaut.View do
       value = cond do
         opts[:value] -> opts[:value]
         :erlang.function_exported(mod, field, 1) -> apply(mod, field, [model])
+        opts[:relation] == :one -> %{id: Map.fetch!(model, field).id, type: opts[:type]}
+        opts[:relation] == :many ->
+          Map.fetch!(model, field)
+          |> Each.map(&(%{id: &1.id, type: opts[:type]}))
         true -> Map.fetch!(model, field)
       end
 
@@ -80,24 +96,17 @@ defmodule Argonaut.View do
   end
 
   def __relations__(_mod, model, relations) do
-    Enum.reduce(relations, %{}, fn({field, view, opts}, acc) ->
-      id = opts[:as] || field
-      data = rel(view, Map.fetch!(model, field), opts)
-
-      if data do
-        Map.put_new(acc, id, data)
-      else
-        acc
-      end
+    Enum.reduce(relations, [], fn({field, count, view, _opts}, acc) ->
+      rel(acc, view, Map.fetch!(model, field))
     end)
   end
 
-  defp rel(_view, %Ecto.Association.NotLoaded{}, _opts), do: nil
-  defp rel(view, models, _opts) when is_list(models) do
-    Phoenix.View.render_many(models, view, "index.json", as: :data)
+  defp rel(list, _view, %Ecto.Association.NotLoaded{}), do: list
+  defp rel(list, view, models) when is_list(models) do
+    list ++ Enum.map(models, &Phoenix.View.render(view, "item.json", item: &1))
   end
-  defp rel(view, model, _opts) do
-    Phoenix.View.render_one(model, view, "show.json", as: :data)
+  defp rel(list, view, model) do
+    list ++ [Phoenix.View.render(view, "item.json", item: model)]
   end
 
   def __render__(data, module, extra) when is_list(data) do

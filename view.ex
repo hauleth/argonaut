@@ -87,7 +87,7 @@ defmodule Argonaut.View do
         opts[:relation] == :one -> %{id: Map.fetch!(model, field).id, type: opts[:type]}
         opts[:relation] == :many ->
           Map.fetch!(model, field)
-          |> Each.map(&(%{id: &1.id, type: opts[:type]}))
+          |> Enum.map(&(%{id: &1.id, type: opts[:type]}))
         true -> Map.fetch!(model, field)
       end
 

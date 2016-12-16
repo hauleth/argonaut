@@ -81,17 +81,18 @@ defmodule Argonaut.View do
   def __attributes__(mod, model, fields) do
     Enum.reduce(fields, %{}, fn({field, opts}, acc) ->
       id = opts[:as] || field
+      alternative = opts[:or]
       value = cond do
         opts[:value] -> opts[:value]
         :erlang.function_exported(mod, field, 1) -> apply(mod, field, [model])
-        opts[:relation] == :one -> %{id: Map.fetch!(model, field).id, type: opts[:type]}
+        opts[:relation] == :one -> %{id: Map.fetch!(model, :"#{field}_id"), type: opts[:type]}
         opts[:relation] == :many ->
           Map.fetch!(model, field)
           |> Enum.map(&(%{id: &1.id, type: opts[:type]}))
         true -> Map.fetch!(model, field)
       end
 
-      Map.put_new(acc, id, value)
+      Map.put_new(acc, id, if value == nil do alternative else value end)
     end)
   end
 

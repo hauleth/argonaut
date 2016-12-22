@@ -23,17 +23,15 @@ defmodule Argonaut.View do
     end
   end
 
-  defmacro has_one(name, view, opts \\ []) do
+  defmacro has(name, view, opts \\ []), do: __has__(name, view, opts)
+
+  defp __has__(name, opts, _) when is_list(opts), do: __has__(name, nil, opts)
+  defp __has__(name, view, opts) do
     quote do
-      Argonaut.View.__relation__(__MODULE__, :one, unquote(name), unquote(view), unquote(opts))
+      Argonaut.View.__relation__(__MODULE__, unquote(name), unquote(view), unquote(opts))
     end
   end
 
-  defmacro has_many(name, view, opts \\ []) do
-    quote do
-      Argonaut.View.__relation__(__MODULE__, :many, unquote(name), unquote(view), unquote(opts))
-    end
-  end
 
   defp views(type, block) do
     quote do
@@ -50,7 +48,7 @@ defmodule Argonaut.View do
         :ok
       end
 
-      def __type__ do
+      def type do
         "#{unquote(type)}"
       end
 
@@ -62,7 +60,7 @@ defmodule Argonaut.View do
       end
       def render("item.json", %{item: item} = map) do
         %{id: Map.fetch!(item, @primary_key),
-          type: __type__,
+          type: type,
           attributes: Argonaut.View.__attributes__(__MODULE__, item, @argonaut_fields),
           relationships: Argonaut.View.__relations__(__MODULE__, item, @argonaut_relations)}
       end
@@ -73,36 +71,61 @@ defmodule Argonaut.View do
     Module.put_attribute(mod, :argonaut_fields, {name, opts})
   end
 
-  def __relation__(mod, count, name, view, opts) do
-    Module.put_attribute(mod, :argonaut_fields, {name, opts ++ [relation: count, type: opts[:type] || view.__type__]})
-    Module.put_attribute(mod, :argonaut_relations, {name, count, view, opts})
+  def __relation__(mod, name, view, opts) do
+    if !opts[:skip_field] do
+      Module.put_attribute(mod, :argonaut_fields, {name, opts ++ [relation: true, type: opts[:type] || view.type]})
+    end
+    Module.put_attribute(mod, :argonaut_relations, {name, view, opts})
   end
 
   def __attributes__(mod, model, fields) do
     Enum.reduce(fields, %{}, fn({field, opts}, acc) ->
       id = opts[:as] || field
       alternative = opts[:or]
-      value = cond do
-        opts[:value] -> opts[:value]
-        :erlang.function_exported(mod, field, 1) -> apply(mod, field, [model])
-        opts[:relation] == :one -> %{id: Map.fetch!(model, :"#{field}_id"), type: opts[:type]}
-        opts[:relation] == :many ->
-          Map.fetch!(model, field)
-          |> Enum.map(&(%{id: &1.id, type: opts[:type]}))
-        true -> Map.fetch!(model, field)
-      end
+      value = value(mod, model, field, opts)
 
       Map.put_new(acc, id, if value == nil do alternative else value end)
     end)
   end
 
-  def __relations__(_mod, model, relations) do
-    Enum.reduce(relations, [], fn({field, count, view, _opts}, acc) ->
-      rel(acc, view, Map.fetch!(model, field))
+  defp value(_mod, _model, _field, [{:value, value} | _]), do: value
+  defp value(mod, model, field, [{:relation, true}, {:type, type} | _]) do
+    entries = relation(mod, model, field)
+
+    if is_list(entries) do
+      entries
+      |> Enum.map(&(%{id: &1.id, type: type}))
+    else
+      %{id: entries.id, type: type}
+    end
+  end
+  defp value(mod, model, field, _opts) do
+    if :erlang.function_exported(mod, field, 1) do
+      apply(mod, field, [model])
+    else
+      Map.fetch!(model, field)
+    end
+  end
+
+  def __relations__(mod, model, relations) do
+    relations
+    |> Enum.reduce([], fn({field, view, _opts}, acc) ->
+      rel(acc, view, relation(mod, model, field))
     end)
+    |> Enum.filter(&(&1))
+  end
+
+  defp relation(mod, model, field) do
+    if :erlang.function_exported(mod, field, 1) do
+      apply(mod, field, [model])
+    else
+      Map.fetch!(model, field)
+    end
   end
 
   defp rel(list, _view, %Ecto.Association.NotLoaded{}), do: list
+  defp rel(list, nil, models) when is_list(models), do: list ++ models
+  defp rel(list, nil, model), do: list ++ [model]
   defp rel(list, view, models) when is_list(models) do
     list ++ Enum.map(models, &Phoenix.View.render(view, "item.json", item: &1))
   end

@@ -13,8 +13,8 @@ defmodule Argonaut.View do
     end
   end
 
-  defmacro schema(type, [do: block]) do
-    views(type, block)
+  defmacro schema(typ, [do: block]) do
+    views(typ, block)
   end
 
   defmacro field(name, opts \\ []) do
@@ -33,7 +33,7 @@ defmodule Argonaut.View do
   end
 
 
-  defp views(type, block) do
+  defp views(typ, block) do
     quote do
       require Argonaut.View
 
@@ -49,7 +49,7 @@ defmodule Argonaut.View do
       end
 
       def type do
-        "#{unquote(type)}"
+        "#{unquote(typ)}"
       end
 
       def render("index.json", %{data: items} = extra) do
@@ -82,6 +82,11 @@ defmodule Argonaut.View do
     Enum.reduce(fields, %{}, fn({field, opts}, acc) ->
       id = opts[:as] || field
       alternative = opts[:or]
+      model = if opts[:delegate] do
+        Map.fetch!(model, opts[:delegate])
+      else
+        model
+      end
       value = value(mod, model, field, opts)
 
       Map.put_new(acc, id, if value == nil do alternative else value end)

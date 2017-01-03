@@ -59,13 +59,17 @@ defmodule Argonaut.View do
         Argonaut.View.__render__(item, __MODULE__, extra)
       end
       def render("item.json", %{item: item} = map) do
-        %{id: Map.fetch!(item, @primary_key),
+        %{id: Argonaut.View.__id__(item, @primary_key),
           type: type,
           attributes: Argonaut.View.__attributes__(__MODULE__, item, @argonaut_fields),
           relationships: Argonaut.View.__relations__(__MODULE__, item, @argonaut_relations)}
       end
     end
   end
+
+  def __id__(model, [id]), do: Map.fetch!(model, id)
+  def __id__(model, [field | rest]), do: __id__(Map.fetch!(model, field), rest)
+  def __id__(model, id), do: Map.fetch!(model, id)
 
   def __field__(mod, name, opts) do
     Module.put_attribute(mod, :argonaut_fields, {name, opts})
@@ -133,7 +137,6 @@ defmodule Argonaut.View do
   end
 
   defp rel(list, _view, nil), do: list
-  defp rel(list, _view, %Ecto.Association.NotLoaded{}), do: list
   defp rel(list, nil, models) when is_list(models), do: list ++ models
   defp rel(list, nil, model), do: list ++ [model]
   defp rel(list, view, models) when is_list(models) do

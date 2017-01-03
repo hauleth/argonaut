@@ -97,11 +97,15 @@ defmodule Argonaut.View do
   defp value(mod, model, field, [{:relation, true}, {:type, type} | _]) do
     entries = relation(mod, model, field)
 
-    if is_list(entries) do
-      entries
-      |> Enum.map(&(%{id: &1.id, type: type}))
-    else
-      %{id: entries.id, type: type}
+    cond do
+      is_list(entries) ->
+        entries
+        |> Enum.map(fn
+                      %{id: id} -> %{id: id, type: type}
+                      nil -> nil
+        end)
+      is_nil(entries) -> nil
+      true -> %{id: entries.id, type: type}
     end
   end
   defp value(mod, model, field, _opts) do
@@ -128,6 +132,7 @@ defmodule Argonaut.View do
     end
   end
 
+  defp rel(list, _view, nil), do: list
   defp rel(list, _view, %Ecto.Association.NotLoaded{}), do: list
   defp rel(list, nil, models) when is_list(models), do: list ++ models
   defp rel(list, nil, model), do: list ++ [model]

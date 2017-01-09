@@ -10,14 +10,16 @@ defmodule Argonaut.Model do
     end
   end
 
-  def add(changeset, _, nil), do: changeset
+  def add(changeset, %Ecto.Association.ManyToMany{} = rel, nil) do
+    add(changeset, rel, [])
+  end
   def add(changeset, %Ecto.Association.ManyToMany{field: field, related: model}, values) when is_list(values) do
     entries = Enum.map(values, &struct(model, %{id: extract(&1)}))
 
     put_assoc(changeset, field, entries)
   end
   def add(changeset, %Ecto.Association.BelongsTo{owner_key: field} = assoc, value) do
-    put_change(changeset, field, extract(value))
+    put_change(changeset, field, value && extract(value))
   end
 
   defp extract(%{id: id}), do: id

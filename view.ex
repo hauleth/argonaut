@@ -32,7 +32,6 @@ defmodule Argonaut.View do
     end
   end
 
-
   defp views(typ, block) do
     quote do
       require Argonaut.View
@@ -59,10 +58,14 @@ defmodule Argonaut.View do
         Argonaut.View.__render__(item, __MODULE__, extra)
       end
       def render("item.json", %{item: item} = map) do
-        %{id: Argonaut.View.__id__(item, @primary_key),
+        id = Argonaut.View.__id__(item, @primary_key)
+        attributes = Argonaut.View.__attributes__(__MODULE__, item, @argonaut_fields)
+        relationships = Argonaut.View.__relations__(__MODULE__, item, @argonaut_relations)
+
+        %{id: id,
           type: type,
-          attributes: Argonaut.View.__attributes__(__MODULE__, item, @argonaut_fields),
-          relationships: Argonaut.View.__relations__(__MODULE__, item, @argonaut_relations)}
+          attributes: attributes,
+          relationships: relationships}
       end
     end
   end
@@ -75,17 +78,18 @@ defmodule Argonaut.View do
     Module.put_attribute(mod, :argonaut_fields, {name, opts})
   end
 
+  def __relation__(mod, name, view, [{:skip, true} | _] = opts) do
+    Module.put_attribute(mod, :argonaut_relations, {name, view, opts})
+  end
   def __relation__(mod, name, view, opts) do
-    if !opts[:skip_field] do
-      Module.put_attribute(mod, :argonaut_fields, {name, opts ++ [relation: true, type: opts[:type] || view.type]})
-    end
+    opts = Keyword.merge([relation: true, type: opts[:type] || view.type], opts)
+    Module.put_attribute(mod, :argonaut_fields, {name, opts})
     Module.put_attribute(mod, :argonaut_relations, {name, view, opts})
   end
 
   def __attributes__(mod, model, fields) do
     Enum.reduce(fields, %{}, fn({field, opts}, acc) ->
-      id = opts[:as] || field
-      alternative = opts[:or]
+      name = opts[:as] || field
       model = if opts[:delegate] do
         Map.fetch!(model, opts[:delegate])
       else
@@ -93,24 +97,21 @@ defmodule Argonaut.View do
       end
       value = value(mod, model, field, opts)
 
-      Map.put_new(acc, id, if value == nil do alternative else value end)
+      Map.put_new(acc, name, value)
     end)
   end
 
+  defp value(mod, model, field, [{:submodel, true} | rest]) do
+    case value(mod, model, field, rest) do
+      %Ecto.Association.NotLoaded{} -> nil
+      value -> value
+    end
+  end
   defp value(_mod, _model, _field, [{:value, value} | _]), do: value
   defp value(mod, model, field, [{:relation, true}, {:type, type} | _]) do
     entries = relation(mod, model, field)
 
-    cond do
-      is_list(entries) ->
-        entries
-        |> Enum.map(fn
-                      %{id: id} -> %{id: id, type: type}
-                      nil -> nil
-        end)
-      is_nil(entries) -> nil
-      true -> %{id: entries.id, type: type}
-    end
+    encode_relation(entries, type)
   end
   defp value(mod, model, field, _opts) do
     if :erlang.function_exported(mod, field, 1) do
@@ -120,10 +121,20 @@ defmodule Argonaut.View do
     end
   end
 
+  defp encode_relation(nil, _), do: nil
+  defp encode_relation(%Ecto.Association.NotLoaded{}, _) do
+    nil
+  end
+  defp encode_relation(entries, type) when is_list(entries) do
+    entries
+    |> Enum.map(&encode_relation(&1, type))
+  end
+  defp encode_relation(%{id: id}, type), do: %{id: id, type: type}
+
   def __relations__(mod, model, relations) do
     relations
-    |> Enum.reduce([], fn({field, view, _opts}, acc) ->
-      rel(acc, view, relation(mod, model, field))
+    |> Enum.reduce([], fn({field, view, opts}, acc) ->
+      rel(acc, view, relation(mod, model, field), opts)
     end)
     |> Enum.filter(&(&1))
   end
@@ -136,13 +147,14 @@ defmodule Argonaut.View do
     end
   end
 
-  defp rel(list, _view, nil), do: list
-  defp rel(list, nil, models) when is_list(models), do: list ++ models
-  defp rel(list, nil, model), do: list ++ [model]
-  defp rel(list, view, models) when is_list(models) do
+  defp rel(list, _view, nil, _opts), do: list
+  defp rel(list, _view, %Ecto.Association.NotLoaded{}, [{:allow_not_loaded, true} | _]), do: list
+  defp rel(list, nil, models, _opts) when is_list(models), do: list ++ models
+  defp rel(list, nil, model, _opts), do: list ++ [model]
+  defp rel(list, view, models, _opts) when is_list(models) do
     list ++ Enum.map(models, &Phoenix.View.render(view, "item.json", item: &1))
   end
-  defp rel(list, view, model) do
+  defp rel(list, view, model, _opts) do
     list ++ [Phoenix.View.render(view, "item.json", item: model)]
   end
 

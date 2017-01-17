@@ -82,8 +82,6 @@ defmodule Argonaut.View do
     Module.put_attribute(mod, :argonaut_relations, {name, view, opts})
   end
   def __relation__(mod, name, view, opts) do
-    opts = Keyword.merge([relation: true, type: opts[:type] || view.type], opts)
-    Module.put_attribute(mod, :argonaut_fields, {name, opts})
     Module.put_attribute(mod, :argonaut_relations, {name, view, opts})
   end
 
@@ -122,9 +120,7 @@ defmodule Argonaut.View do
   end
 
   defp encode_relation(nil, _), do: nil
-  defp encode_relation(%Ecto.Association.NotLoaded{}, _) do
-    nil
-  end
+  defp encode_relation(%Ecto.Association.NotLoaded{}, _), do: nil
   defp encode_relation(entries, type) when is_list(entries) do
     entries
     |> Enum.map(&encode_relation(&1, type))
@@ -149,13 +145,13 @@ defmodule Argonaut.View do
 
   defp rel(list, _view, nil, _opts), do: list
   defp rel(list, _view, %Ecto.Association.NotLoaded{}, [{:allow_not_loaded, true} | _]), do: list
-  defp rel(list, nil, models, _opts) when is_list(models), do: list ++ models
-  defp rel(list, nil, model, _opts), do: list ++ [model]
+  defp rel(list, nil, models, _opts) when is_list(models), do: models ++ list
+  defp rel(list, nil, model, _opts), do: [model | list]
   defp rel(list, view, models, _opts) when is_list(models) do
-    list ++ Enum.map(models, &Phoenix.View.render(view, "item.json", item: &1))
+    Enum.map(models, &Phoenix.View.render(view, "item.json", item: &1)) ++ list
   end
   defp rel(list, view, model, _opts) do
-    list ++ [Phoenix.View.render(view, "item.json", item: model)]
+    [Phoenix.View.render(view, "item.json", item: model) | list]
   end
 
   def __render__(data, module, extra) when is_list(data) do

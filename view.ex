@@ -145,6 +145,9 @@ defmodule Argonaut.View do
 
   defp rel(list, _view, nil, _opts), do: list
   defp rel(list, _view, %Ecto.Association.NotLoaded{}, [{:allow_not_loaded, true} | _]), do: list
+  defp rel(list, _view, %Ecto.Association.NotLoaded{__field__: field}, _) do
+    raise "Assoctiation #{field} not loaded, preload it or add `allow_not_loaded: true`"
+  end
   defp rel(list, nil, models, _opts) when is_list(models), do: models ++ list
   defp rel(list, nil, model, _opts), do: [model | list]
   defp rel(list, view, models, _opts) when is_list(models) do

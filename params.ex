@@ -26,7 +26,7 @@ defmodule Argonaut.Params do
 end
 
 defmodule Argonaut.InvalidData do
-  defexception message: "Invalid data", plug_status: 422
+  defexception message: "Invalid data"
 
   def message(%{message: message}), do: message
 end

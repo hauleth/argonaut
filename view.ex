@@ -63,7 +63,7 @@ defmodule Argonaut.View do
         relationships = Argonaut.View.__relations__(__MODULE__, item, @argonaut_relations)
 
         %{id: id,
-          type: type,
+          type: type(),
           attributes: attributes,
           relationships: relationships}
       end
@@ -145,7 +145,7 @@ defmodule Argonaut.View do
 
   defp rel(list, _view, nil, _opts), do: list
   defp rel(list, _view, %Ecto.Association.NotLoaded{}, [{:allow_not_loaded, true} | _]), do: list
-  defp rel(list, _view, %Ecto.Association.NotLoaded{__field__: field}, _) do
+  defp rel(_list, _view, %Ecto.Association.NotLoaded{__field__: field}, _) do
     raise "Assoctiation #{field} not loaded, preload it or add `allow_not_loaded: true`"
   end
   defp rel(list, nil, models, _opts) when is_list(models), do: models ++ list

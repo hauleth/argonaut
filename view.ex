@@ -51,6 +51,7 @@ defmodule Argonaut.View do
         "#{unquote(typ)}"
       end
 
+      @spec render(charlist, map) :: map
       def render("index.json", %{data: items} = extra) do
         Argonaut.View.__render__(items, __MODULE__, extra)
       end
@@ -101,8 +102,9 @@ defmodule Argonaut.View do
 
   defp value(mod, model, field, [{:submodel, true} | rest]) do
     case value(mod, model, field, rest) do
-      %Ecto.Association.NotLoaded{} -> nil
-      value -> value
+      %Ecto.Association.NotLoaded{} -> Keyword.get(rest, :or)
+      nil -> Keyword.get(rest, :or)
+      val -> val
     end
   end
   defp value(_mod, _model, _field, [{:value, value} | _]), do: value
@@ -121,11 +123,11 @@ defmodule Argonaut.View do
 
   defp encode_relation(nil, _), do: nil
   defp encode_relation(%Ecto.Association.NotLoaded{}, _), do: nil
-  defp encode_relation(entries, type) when is_list(entries) do
+  defp encode_relation(entries, typ) when is_list(entries) do
     entries
-    |> Enum.map(&encode_relation(&1, type))
+    |> Enum.map(&encode_relation(&1, typ))
   end
-  defp encode_relation(%{id: id}, type), do: %{id: id, type: type}
+  defp encode_relation(%{id: id}, typ), do: %{id: id, type: typ}
 
   def __relations__(mod, model, relations) do
     relations

@@ -8,6 +8,7 @@ defmodule Argonaut.Paginate do
   def since(query, _, _), do: query
 
   def pagination_header(conn, items, column \\ :inserted_at)
+  def pagination_header(conn, [], _), do: conn
   def pagination_header(%Plug.Conn{} = conn, items, column) when is_list(items) do
     last = items
            |> List.last

@@ -76,10 +76,13 @@ defmodule Argonaut.View do
   def __id__(model, id), do: Map.fetch!(model, id)
 
   def __field__(mod, name, opts) do
-    Module.put_attribute(mod, :argonaut_fields, {name, opts})
+    Module.put_attribute(mod, :argonaut_fields, {name, Enum.into(opts, %{})})
   end
 
-  def __relation__(mod, name, view, [{:skip, true} | _] = opts) do
+  def __relation__(mod, name, view, opts) when is_list(opts) do
+    __relation__(mod, name, view, Enum.into(opts, %{}))
+  end
+  def __relation__(mod, name, view, %{skip: true} = opts) do
     Module.put_attribute(mod, :argonaut_relations, {name, view, opts})
   end
   def __relation__(mod, name, view, opts) do
@@ -100,15 +103,15 @@ defmodule Argonaut.View do
     end)
   end
 
-  defp value(mod, model, field, [{:submodel, true} | rest]) do
-    case value(mod, model, field, rest) do
-      %Ecto.Association.NotLoaded{} -> Keyword.get(rest, :or)
-      nil -> Keyword.get(rest, :or)
+  defp value(mod, model, field, %{submodel: true} = opts) do
+    case value(mod, model, field, Map.drop(opts, [:submodel])) do
+      %Ecto.Association.NotLoaded{} -> opts[:or]
+      nil -> opts[:or]
       val -> val
     end
   end
-  defp value(_mod, _model, _field, [{:value, value} | _]), do: value
-  defp value(mod, model, field, [{:relation, true}, {:type, type} | _]) do
+  defp value(_mod, _model, _field, %{value: value}), do: value
+  defp value(mod, model, field, %{relation: true, type: type}) do
     entries = relation(mod, model, field)
 
     encode_relation(entries, type)
@@ -146,9 +149,9 @@ defmodule Argonaut.View do
   end
 
   defp rel(list, _view, nil, _opts), do: list
-  defp rel(list, _view, %Ecto.Association.NotLoaded{}, [{:allow_not_loaded, true} | _]), do: list
-  defp rel(_list, _view, %Ecto.Association.NotLoaded{__field__: field}, _) do
-    raise "Assoctiation #{field} not loaded, preload it or add `allow_not_loaded: true`"
+  defp rel(list, _view, %Ecto.Association.NotLoaded{}, %{allow_not_loaded: true}), do: list
+  defp rel(_list, _view, %Ecto.Association.NotLoaded{__field__: field}, opts) do
+    raise "Assoctiation #{field} not loaded, preload it or add `allow_not_loaded: true`, given: #{inspect opts}"
   end
   defp rel(list, nil, models, _opts) when is_list(models), do: models ++ list
   defp rel(list, nil, model, _opts), do: [model | list]

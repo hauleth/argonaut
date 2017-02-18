@@ -86,6 +86,9 @@ defmodule Argonaut.View do
     Module.put_attribute(mod, :argonaut_relations, {name, view, opts})
   end
   def __relation__(mod, name, view, opts) do
+    type = Map.get(opts, :type)
+
+    __field__(mod, name, Map.merge(opts, %{relation: true, type: type}))
     Module.put_attribute(mod, :argonaut_relations, {name, view, opts})
   end
 

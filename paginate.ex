@@ -3,7 +3,7 @@ defmodule Argonaut.Paginate do
 
   def since(query, params, column \\ :inserted_at)
   def since(query, %{"last" => last}, column) do
-    where(query, [f], field(f, ^column) > ^last)
+    where(query, [f], field(f, ^column) < ^last)
   end
   def since(query, _, _), do: query
 

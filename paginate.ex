@@ -1,13 +1,13 @@
 defmodule Argonaut.Paginate do
   import Ecto.Query, only: [where: 3, limit: 2]
 
-  def since(query, params, column \\ :inserted_at)
-  def since(query, %{"last" => last}, column, batch \\ 20) do
+  def since(query, params, column \\ :inserted_at, batch \\ 20)
+  def since(query, %{"last" => last}, column, batch) do
     query
     |> where([f], field(f, ^column) < ^last)
-    |> limit(batch)
+    |> limit(^batch)
   end
-  def since(query, _, _), do: query
+  def since(query, _, _, _), do: query
 
   def pagination_header(conn, items, column \\ :inserted_at)
   def pagination_header(conn, [], _), do: conn

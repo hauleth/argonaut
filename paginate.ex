@@ -1,9 +1,11 @@
 defmodule Argonaut.Paginate do
-  import Ecto.Query, only: [where: 3]
+  import Ecto.Query, only: [where: 3, limit: 2]
 
   def since(query, params, column \\ :inserted_at)
-  def since(query, %{"last" => last}, column) do
-    where(query, [f], field(f, ^column) < ^last)
+  def since(query, %{"last" => last}, column, batch \\ 20) do
+    query
+    |> where([f], field(f, ^column) < ^last)
+    |> limit(batch)
   end
   def since(query, _, _), do: query
 

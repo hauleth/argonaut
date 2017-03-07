@@ -7,7 +7,10 @@ defmodule Argonaut.Paginate do
     |> where([f], field(f, ^column) < ^last)
     |> limit(^batch)
   end
-  def since(query, _, _, _), do: query
+  def since(query, _, _, batch) do
+    query
+    |> limit(^batch)
+  end
 
   def pagination_header(conn, items, column \\ :inserted_at)
   def pagination_header(conn, [], _), do: conn

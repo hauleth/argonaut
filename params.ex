@@ -17,7 +17,8 @@ defmodule Argonaut.Params do
 
   defp check({:ok, data}, type) do
     case data do
-      %{"type" => ^type, "attributes" => attributes} -> {:ok, attributes}
+      %{"type" => ^type, "attributes" => %{} = attributes} -> {:ok, attributes}
+      %{"type" => ^type } -> {:error, "Expected attributes to be map"}
       %{"type" => other} -> {:error, "Expected #{type} got #{other}"}
       _ -> {:error, "Unknown type, expected #{type}"}
     end

@@ -7,7 +7,7 @@ defmodule Argonaut.Params do
 
   def parse!(data, type) do
     case parse(data, type) do
-      {:ok, attributes} -> attributes
+      {:ok, attributes} -> attributes || %{}
       {:error, message} -> raise Argonaut.InvalidData, message: message
     end
   end
@@ -18,7 +18,7 @@ defmodule Argonaut.Params do
   defp check({:ok, data}, type) do
     case data do
       %{"type" => ^type, "attributes" => %{} = attributes} -> {:ok, attributes}
-      %{"type" => ^type } -> {:error, "Expected attributes to be map"}
+      %{"type" => ^type} -> {:error, "Expected attributes to be map"}
       %{"type" => other} -> {:error, "Expected #{type} got #{other}"}
       _ -> {:error, "Unknown type, expected #{type}"}
     end

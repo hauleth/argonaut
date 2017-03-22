@@ -3,6 +3,9 @@ defmodule Argonaut.Paginate do
 
   def next(query, params, order \\ {:desc, :inserted_at}, batch \\ 20)
   def next(query, %{"last" => last}, order, batch) do
+    next(query, %{"x-last" => last}, order, batch)
+  end
+  def next(query, %{"x-last" => last}, order, batch) do
     ordering = [order]
 
     query

@@ -1,0 +1,2 @@
+defmodule Argonaut do
+end

@@ -28,7 +28,7 @@ defmodule Argonaut.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    [{:phoenix, ">= 1.2.0"},
+    [{:phoenix, ">= 1.3.0-rc"},
      {:plug, ">= 0.0.0"},
      {:ecto, ">= 0.0.0"}]
   end
